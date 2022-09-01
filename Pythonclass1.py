@@ -39,11 +39,15 @@ t = np.ones([25,25],dtype=int)
 #add np.linspace example
 
 #For loop
+start = time.process_time()
 p = np.zeros(1)
 for k in range(1,4):
-   #P = np.append(p,k)
-   #P = np.append(p,k**2)
-   print(k)
+   #p = np.append(p,k)
+   #p = np.append(p,k**2)
+   print(p)
+
+end = time.process_time()
+print(end-start)
 
 #while Loop
 r = 10
@@ -67,8 +71,8 @@ print(t)
 
 #Scipy has a minimize function that may be useful in the future
 def fun(paramt):
-    # print(paramt)  # <-- As you can see, params is an array in NumPy.
-    x, y, z = paramt # <-- You might want to give the component variables names to make them easier to read.
+    # print(paramt)  # As you can see, params is an array in NumPy.
+    x, y, z = paramt # You might want to give the component variables names to make them easier to read.
     return x**2 + y**3 + z**3
 
 first_guess = [0.5, 0.5, 0.5]
