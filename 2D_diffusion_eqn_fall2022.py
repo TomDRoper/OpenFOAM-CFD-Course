@@ -35,8 +35,8 @@ X, Y = np.meshgrid(x, y)
 # array initialization
 u = np.ones((ny, nx))  
 un = np.ones((ny, nx))
-u[-1, :] = T0
-u[:, 0] = T0
+u[-1, :] = T0                                  #Changes the value in the X direction along the wall
+u[:, 0] = T0                                   #Changes the value in the Y direction along the wall
 
 # plotting IC as 3D bump
 fig1 = plt.figure()
