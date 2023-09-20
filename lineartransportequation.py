@@ -86,3 +86,6 @@ print(end-start)
 #    u[nx-1] = u[1]
 
 plt.plot(x,u);
+plt.show()
+plt.plot(u,x);
+plt.show()
