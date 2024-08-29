@@ -36,7 +36,8 @@ o = np.zeros(25)
 f = np.ones(25)
 t = np.ones([25,25],dtype=int)
 
-#add np.linspace example
+#np.linspace example
+r = np.linspace(2.0, 3.0, num=5)
 
 #For loop
 start = time.process_time()
