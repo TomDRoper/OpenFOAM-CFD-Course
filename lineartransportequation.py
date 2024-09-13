@@ -2,7 +2,8 @@
 """
 Created on Wed Jul 20 21:28:17 2022
 
-@author: colin
+@author: colin 
+Thanks to Kyle Watson for correcting the CDS portion of the code (student of 2024)
 """
 
 # =============================================================================
@@ -68,21 +69,23 @@ print(end-start)
 # end = time.process_time()
 # print(end-start)
 
-# # CDS with inner for-loop
-#for n in range(nt):
-#    un = u.copy()
-#    for i in range(1,nx-1):
-#        u[i] = un[i] - c*dt/(2*dx)*(un[i+1]-un[i-1])
-#        # periodic BC's
-#        u[0] = u[nx-2]
-#        u[nx-1] = u[1]
 
-# # CDS with vectorization
-#for n in range(nt):
+# # Corrected CDS with vectorization
+# u = initial_conditions()
+# start = time.process_time()
+# un = u.copy()
+# for n in range(nt):
+#    u_prev_prev = un.copy()
 #    un = u.copy()
-#    u[1:-1] = un[1:-1] - c*dt/(2*dx)*(un[2:]-un[:-2])
+#    u[1:-1] = u_prev_prev[1:-1] - c*dt/dx*(un[2:]-un[:-2])
 #    # periodic BC's
 #    u[0] = u[nx-2]
 #    u[nx-1] = u[1]
+# print(time.process_time()-start)
+# plt.plot(x,u, '--', label = "Corrected CDS with vectorization")
+# # plt.title("Corrected CDS with vectorization")
+# # plt.show()
+
+
 
 plt.plot(x,u);
