@@ -1,0 +1,133 @@
+# =============================================================================
+# Explicit Finite Difference Method Code
+# Solves the 1D Isothermal Reaction-Advection-Diffusion Equation
+# Includes A + B -> C and B -> D reactions
+# =============================================================================
+
+# Required Modules
+import numpy as np
+from matplotlib import pyplot as plt
+import time
+
+# Allows for division by zero for initial termination condition
+np.seterr(divide='ignore')
+
+F_a = 600                                   # initial conc. species A (mol/m3)               
+F_b = 500                                   # initial conc. species B (mol/m3)  
+D1 = .005                                   # axial dispersion coefficient (m2/s)
+Q1 = 8.3*10**-8                             # volumetric flowrate (m3/s)
+Ac1 = 2.0*10**-6                            # cross-sectional area (m2)
+u1 = Q1/Ac1                                 # average velocity (m/s)
+V1 = 1.0*10**-5                             #reactor volume (m3)
+xl1 = V1/Ac1                                #tubing length (m)
+nx1 = 200                                   # number spatial gridpoints
+dx1 = xl1/(nx1-1)                           # spatial step size (m)
+dt1 = .2*dx1                                # time step size (s) defined by dx
+x1 = np.linspace(0,xl1,nx1)                 # x grid
+Ea1 = 53106.5                               # activation energy (J/mol)
+k01 = 1175.26                               # arrhenius factor (m3/mol/s)
+R = 8.314                                   # universal gas constant (J/mol/K)
+T1 = 150 + 273.15                           # set-point temperature (K)
+k1 = k01*np.exp(-Ea1/R/T1)                  # rate constant calc (L/mol/s)
+k2 = k1*100                                # degradation rate constant (L/mol/s)
+p = 0                                       # iteration counter
+
+# array initialization for each species (also the ICs)
+A = np.ones(nx1)*F_a
+An = np.ones(nx1)*F_a
+B = np.ones(nx1)*F_b
+Bn = np.ones(nx1)*F_b
+C = np.zeros(nx1)
+Cn = np.zeros(nx1)
+D = np.zeros(nx1)
+Dn = np.zeros(nx1) 
+
+# tolerance array initlization and assignment
+tolcheck = np.ones(nx1)
+reltol = 1e-7                          
+
+# function for checking termination condition by relative tolerance
+def check_yourself(tolcheck,Cn):
+    out = (np.abs((np.linalg.norm(tolcheck)-np.linalg.norm(Cn))))/np.linalg.norm(Cn) 
+    return out
+
+# Vectorized FDM schemes function calls (Central and Backward/Upwind)
+# Modify B to account for both reactions: A + B -> C and B -> D
+def CDS(u1,dt1,dx1,D1,k1,k2,main,s1,s2,stoic1,stoic2):
+    out_main = main[1:-1] - (u1)*(dt1/(2*dx1))*(main[2:]-main[:-2]) \
+    + D1*dt1/dx1**2*(main[2:]-2*main[1:-1]+main[:-2]) \
+    + stoic1*k1*s1[1:-1]*s2[1:-1]*dt1 \
+    + stoic2*k2*s2[1:-1]*dt1  # degradation term included here for B
+    return out_main
+
+# For the product D formation from B degradation
+def CDS_degradation(u1,dt1,dx1,D1,k2,main,s2,stoic):
+    out = main[1:-1] - (u1)*(dt1/(2*dx1))*(main[2:]-main[:-2])   \
+    + D1*dt1/dx1**2*(main[2:]-2*main[1:-1]+main[:-2])            \
+    + stoic*k2*s2[1:-1]*dt1   
+    return out
+
+
+# Vectorized FDM schemes function calls (Upwind Difference Scheme for UDS)
+# Modify B to account for both reactions: A + B -> C and B -> D
+def UDS(u1,dt1,dx1,D1,k1,k2,main,s1,s2,stoic1,stoic2):
+    out_main = main[1:-1] -(u1)*(dt1/(dx1))*(main[1:-1]-main[:-2]) \
+    + D1*dt1/dx1**2*(main[2:]-2*main[1:-1]+main[:-2]) \
+    + stoic1*k1*s1[1:-1]*s2[1:-1]*dt1 \
+    + stoic2*k2*s2[1:-1]*dt1  # degradation term included here for B
+    return out_main
+
+# For the product D formation from B degradation using UDS
+def UDS_degradation(u1,dt1,dx1,D1,k2,main,s2,stoic):
+    out = main[1:-1] -(u1)*(dt1/(dx1))*(main[1:-1]-main[:-2])   \
+    + D1*dt1/dx1**2*(main[2:]-2*main[1:-1]+main[:-2])            \
+    + stoic*k2*s2[1:-1]*dt1   
+    return out
+
+# main loop for time iteration
+start = time.process_time()
+termcond = check_yourself(tolcheck,Cn)
+while termcond >= reltol: 
+        # updates termination condition each loop
+        termcond = check_yourself(tolcheck,Cn)
+        # updating temporary arrays to current solution
+        An = A.copy()
+        Bn = B.copy()
+        Cn = C.copy()
+        Dn = D.copy()
+        # Dirichlet BCs for Reactor Inlet
+        A[0] = F_a
+        B[0] = F_b
+        # Neumann BCs for Reactor Outlet
+        A[nx1-1] = A[nx1-2] 
+        B[nx1-1] = B[nx1-2] 
+        C[nx1-1] = C[nx1-2]
+        D[nx1-1] = D[nx1-2]
+        
+        # species solvers
+        A[1:-1] = UDS(u1,dt1,dx1,D1,k1,0,An,An,Bn,-1,0)        # A + B -> C, A decreases only
+        B[1:-1] = UDS(u1,dt1,dx1,D1,k1,k2,Bn,An,Bn,-1,-1)      # B is consumed by both reactions
+        C[1:-1] = UDS(u1,dt1,dx1,D1,k1,0,Cn,An,Bn,1,0)         # A + B -> C, C increases
+        D[1:-1] = UDS_degradation(u1,dt1,dx1,D1,k2,Dn,Bn,1)    # B -> D, D increases
+
+        # updates tolerance check array
+        tolcheck = C.copy()
+        p += 1
+
+end = time.process_time()
+cputime = round(end-start,2)
+# plots species concentrations against normalized reactor length (x/xl)           
+plt.figure(1)
+plt.plot(x1/xl1,D, label="D (Degradation)")
+plt.plot(x1/xl1,C, label="C (Product)")
+plt.plot(x1/xl1,A, label="A (Reactant)")
+plt.plot(x1/xl1,B, label="B (Reactant)")
+plt.xlabel('Normalized Reactor Length (-)')
+plt.ylabel('Molar Concentration (mol/m3)')
+plt.legend()
+
+# determines limiting reagent and calculates predicted yield of product
+lim_reagent = np.min([F_a,F_b])
+prod_yield = round(C[nx1-1]/lim_reagent*100,2)
+print('Predicted Product Yield: %s %%' %(prod_yield))
+print('The model solved in %ss and required %s iterations' %(cputime,p))
