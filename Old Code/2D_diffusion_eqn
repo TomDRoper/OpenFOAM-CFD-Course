@@ -1,0 +1,122 @@
+# =============================================================================
+# Enhanced Visualization for the 2D Diffusion Equation
+# =============================================================================
+
+# ===============================
+# SECTION 1: Import Required Modules
+# ===============================
+import numpy as np
+from matplotlib import pyplot as plt
+from matplotlib import cm
+from mpl_toolkits.mplot3d import Axes3D 
+
+# ===============================
+# SECTION 2: Define Simulation Parameters
+# ===============================
+nx = 100                              # number of x grid-points
+ny = 100                              # number of y grid-points
+nt = 1000                             # number of time steps
+nu = 0.5                              # diffusivity term (m²/s)
+xl = 2                                # length of domain in x-direction
+yl = 2                                # length of domain in y-direction
+dx = xl / (nx - 1)                    # x step size
+dy = yl / (ny - 1)                    # y step size
+sigma = 0.25                          # stability factor
+dt = sigma * dx * dy / nu            # time step size (stability condition)
+T0 = 2                                # "hot" temperature value
+Tw = 1                                # "cool" temperature value
+
+# ===============================
+# SECTION 3: Create Grid and Initialize Arrays
+# ===============================
+x = np.linspace(0, xl, nx)
+y = np.linspace(0, yl, ny)
+X, Y = np.meshgrid(x, y)
+
+u = np.ones((ny, nx))                # initial temperature array
+un = np.ones((ny, nx))               # temporary array for time stepping
+
+# Apply initial boundary conditions
+u[-1, :] = T0                        # top boundary (y = max)
+u[:, 0] = T0                         # left boundary (x = 0)
+
+# ===============================
+# SECTION 4: Initial Condition Plots
+# ===============================
+
+# --- 3D Plot of Initial Condition ---
+fig1 = plt.figure(figsize=(8, 6))
+ax1 = fig1.add_subplot(111, projection='3d')
+surf = ax1.plot_surface(X, Y, u, rstride=1, cstride=1, cmap='inferno',
+                        edgecolor='none', antialiased=True)
+ax1.set_title('Initial Temperature Distribution (3D)', fontsize=14)
+ax1.set_xlabel('$x$', fontsize=12)
+ax1.set_ylabel('$y$', fontsize=12)
+ax1.set_zlabel('$Temperature$', fontsize=12)
+ax1.set_zlim(1, 2.5)
+fig1.colorbar(surf, ax=ax1, shrink=0.5, aspect=5, label='Temperature')
+
+# --- 2D Plot of Initial Condition ---
+fig2 = plt.figure(figsize=(6, 6), dpi=100)
+ax2 = fig2.add_subplot(111)
+disp = ax2.imshow(u, cmap='inferno', origin='lower', extent=[0, xl, 0, yl])
+ax2.set_title('Initial Temperature Distribution (2D)', fontsize=14)
+ax2.set_xlabel('$x$', fontsize=12)
+ax2.set_ylabel('$y$', fontsize=12)
+fig2.colorbar(disp, ax=ax2, label='Temperature')
+
+# ===============================
+# SECTION 5: Time-Stepping Function (Explicit CDS)
+# ===============================
+def diffuse(nt):
+    u[-1, :] = T0  # Reapply top boundary each call
+    # u[:, 0] = T0  # Optional: Reapply left boundary if needed
+
+    for n in range(nt + 1):
+        un = u.copy()
+        # Central Difference Scheme (2D Diffusion)
+        u[1:-1, 1:-1] = (un[1:-1, 1:-1] +
+                        nu * dt / dx**2 *
+                        (un[1:-1, 2:] - 2 * un[1:-1, 1:-1] + un[1:-1, 0:-2]) +
+                        nu * dt / dy**2 *
+                        (un[2:, 1:-1] - 2 * un[1:-1, 1:-1] + un[0:-2, 1:-1]))
+        
+        # Dirichlet Boundary Conditions
+        u[0, :] = Tw        # bottom boundary
+        u[-1, :] = T0       # top boundary
+        u[:, 0] = T0        # left boundary
+        u[:, -1] = Tw       # right boundary
+
+# ===============================
+# SECTION 6: Run Simulation
+# ===============================
+diffuse(nt)
+
+# ===============================
+# SECTION 7: Final Condition Plots
+# ===============================
+
+# --- 3D Plot of Final Condition ---
+fig3 = plt.figure(figsize=(8, 6))
+ax3 = fig3.add_subplot(111, projection='3d')
+surf2 = ax3.plot_surface(X, Y, u, rstride=1, cstride=1, cmap='plasma',
+                         edgecolor='none', antialiased=True)
+ax3.set_title('Final Temperature Distribution (3D)', fontsize=14)
+ax3.set_xlabel('$x$', fontsize=12)
+ax3.set_ylabel('$y$', fontsize=12)
+ax3.set_zlabel('$Temperature$', fontsize=12)
+ax3.set_zlim(1, 2.5)
+fig3.colorbar(surf2, ax=ax3, shrink=0.5, aspect=5, label='Temperature')
+
+# --- 2D Plot of Final Condition ---
+fig4 = plt.figure(figsize=(6, 6), dpi=100)
+ax4 = fig4.add_subplot(111)
+disp2 = ax4.imshow(u, cmap='plasma', origin='lower', extent=[0, xl, 0, yl])
+ax4.set_title('Final Temperature Distribution (2D)', fontsize=14)
+ax4.set_xlabel('$x$', fontsize=12)
+ax4.set_ylabel('$y$', fontsize=12)
+fig4.colorbar(disp2, ax=ax4, label='Temperature')
+
+# ===============================
+# SECTION 8: Display Plots
+# ======================
