@@ -1,0 +1,148 @@
+# ===============================
+# SECTION 1: Required Modules
+# ===============================
+import numpy as np
+from matplotlib import pyplot as plt
+from matplotlib import cm
+from mpl_toolkits.mplot3d import Axes3D 
+import math
+from array import array
+
+# ===============================
+# SECTION 2: Geometry and Physical Parameters
+# ===============================
+D = 0.0015875                                   # tubing diameter in m
+xl = 30/100                                     # tubing length in m & x range
+yl = D                                          # tubing diameter & y range
+
+# ===============================
+# SECTION 3: Grid and Numerical Parameters
+# ===============================
+nx = 300                                        # x grid points
+ny = 50                                         # y grid points
+dx = xl/(nx-1)                                  # x stepsize
+dy = yl/(ny-1)                                  # y stepsize
+k = .12                                         # thermal conductvity W/(m*K)
+p = 1750                                        # density (kg/m3)
+Cp = 1172                                       # specifc heat (J/kg/K)
+a = k/(p*Cp)                                    # thermal diffusivity (m2/s)
+sigma = .001                                    # time step factor
+dt = sigma * dx * dy / a                        # time stepsize 
+
+# ===============================
+# SECTION 4: Flowrate and Velocity Calculations
+# ===============================
+Vr = math.pi*(D/2)**2*xl                        # tubing volume (m3)
+Qmlm = 1                                        # volumetric flowrate (mL/min)
+Q = (Qmlm*10**-6)/60                            # volumetric flowrate (m3/s)
+Ac = math.pi*(D/2)**2                           # cross-sectional area (m2)
+
+# ===============================
+# SECTION 5: Coefficients and Boundary Condition Parameters
+# ===============================
+lamx = a*dt/dx**2                               # lumped coefficient
+lamy = a*dt/dy**2                               # lumped coefficient
+Nu = 3.66                                       # nusselt laminar flow in tube
+h = Nu*k/D                                      # convective heat transfer coefficient (W/m2/K)
+T0 = 130+273.15                                 # stream inlet temperature (degK)
+Tw = 25+273.15                                  # wall temperature (degK)
+reltol = 1e-8                                   # tolerance for convergence  
+
+# ===============================
+# SECTION 6: Meshgrid Setup
+# ===============================
+x = np.linspace(0, xl, nx) 
+y = np.linspace(0, yl, ny) 
+X, Y = np.meshgrid(x, y) 
+
+# ===============================
+# SECTION 7: Hagen-Poiseuille Velocity Profile
+# ===============================
+uAvg = Q/Ac                                     # average velocity (m/s)
+uMax = 2*uAvg                                   # max velocity (m/s)
+u = np.zeros(ny)                                # array initilization
+u[:] = np.linspace(-(D/2),(D/2),ny)             # array intialization
+u[:] = uMax*(1-(u[:]/(D/2))**2)                 # hagan-poiselle profile
+u[0]=u[-1]=0                                    # no slip BC
+u = np.array([u,]*nx)                           # velocity field
+u = u.T                                         # transpose/align field
+maxCFL = np.max(u*dt/dx)                        # CFL condition calc.
+print('The max CFL is %s'%(maxCFL))
+
+# ===============================
+# SECTION 8: Main Simulation Function
+# ===============================
+def lets_get_tubular(): 
+    # Array Initialization
+    Ttol = np.zeros((ny,nx)) 
+    T = np.ones((ny, nx))*Tw  
+    Tn = np.ones((ny, nx))*Tw 
+    
+    # Initial Termination Condition Setup
+    termcond = (np.abs((np.linalg.norm(Ttol)-np.linalg.norm(Tn))))/np.linalg.norm(Tn)
+    stepcount = 1 # step counter
+    
+    # ===============================
+    # SECTION 9: Finite Difference Time Loop
+    # ===============================
+    while termcond >= reltol: 
+        termcond = np.abs((np.linalg.norm(Ttol)-np.linalg.norm(Tn)))/np.linalg.norm(Tn)
+        Tn = T.copy()
+        
+        # Vectorized Explicit Finite Difference Scheme
+        T[1:-1, 1:-1] = (Tn[1:-1,1:-1] - (u[1:-1,1:-1]*(dt/(2*dx))*(Tn[1:-1,2:]  \
+                     -Tn[1:-1,:-2]))                                             \
+                     + lamx *(Tn[1:-1, 2:] - 2 * Tn[1:-1, 1:-1] + Tn[1:-1, :-2]) \
+                     + lamy* (Tn[2:,1:-1] - 2 * Tn[1:-1, 1:-1] + Tn[:-2, 1:-1])) \
+                     - h*D*math.pi*(Tn[1:-1,1:-1]-Tw)*dt/p/Cp*xl/Vr
+
+        # Boundary Conditions
+        T[0, :] = Tw         # wall boundary at bottom
+        T[-1, :] = Tw        # wall boundary at top
+        T[:, 0] = T0         # inlet (left) boundary
+        T[:, -1] = T[:,-2]   # outlet (right) boundary (Neumann)
+        
+        Ttol = T.copy()      # update reference solution
+        stepcount += 1       # increment step count
+
+    # ===============================
+    # SECTION 10: Postprocessing & Plotting
+    # ===============================
+    
+    T[:]=T[:]-273.15                            # convert temperature from K to degC
+
+    # Subplot 1: 2D Temperature Contour
+    fig1 = plt.subplot(211)
+#    ax = fig1.gca()
+#    plt.imshow(T[:])
+    cont = plt.contourf(X,Y,T[:],50)
+    ax = plt.gca()
+    ax.axis('scaled')
+    ax.axes.get_yaxis().set_visible(False)
+    plt.xlim(0,.05)
+    plt.xlabel('Tubing Length (m)')
+    cbar = plt.colorbar(cont)
+    cbar.ax.set_ylabel('Temperature (degC)')
+    
+    # Subplot 2: Temperature along center and near-wall lines
+    centerline = ny/2
+    wallline = ny-5
+    centerline = int(centerline)
+    wallline = int(wallline)
+    centerT = T[centerline,:]
+    wallT = T[wallline,:]
+    fig2 = plt.subplot(212)
+    plt.plot(x, centerT,label='center')
+    plt.plot(x,wallT,label='wall')
+    plt.legend()
+    plt.ylabel('Temperature (degC)')
+    plt.xlabel('Tubing Length (m)')
+    
+    plt.show()
+    print('Stepcount = %s' %(stepcount))
+
+# ===============================
+# SECTION 11: Run the Solver
+# ===============================
+if __name__ == "__main__":
+    lets_get_tubular()
