@@ -1,0 +1,75 @@
+#Code Created by Colin Bailey
+
+# ===============================
+# 1D Heat Diffusion Simulation
+# ===============================
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# ========================================
+# SECTION 1: Define Simulation Parameters
+# ========================================
+
+L = 10.0             # Total length of the rod (units: meters or cm, etc.)
+T_L = 100.0          # Temperature at the left boundary (fixed)
+T_R = 50.0           # Temperature at the right boundary (fixed)
+T_0 = 25.0           # Initial uniform temperature of the rod
+alpha = 1            # Thermal diffusivity constant (units: m^2/s)
+Nx = 50              # Number of spatial grid points
+dx = L / (Nx - 1)    # Spatial step size
+dt = 0.01            # Time step size
+t_max = 10.0         # Total simulation time
+
+# ========================================
+# SECTION 2: Stability Check (Explicit Scheme)
+# ========================================
+
+# CFL condition for stability of explicit finite difference method:
+stability_condition = alpha * dt / dx**2
+print(f"Stability Condition (alpha*dt/dx^2): {stability_condition}")
+if stability_condition > 0.5:
+    print("Warning: The solution may be unstable! Try reducing dt or increasing dx.")
+
+# ========================================
+# SECTION 3: Initialize Temperature Array
+# ========================================
+
+x = np.linspace(0, L, Nx)         # Spatial grid
+T = np.ones(Nx) * T_0             # Set all points to initial temperature
+T[0] = T_L                        # Set left boundary condition
+T[-1] = T_R                       # Set right boundary condition
+
+# ========================================
+# SECTION 4: Time-Stepping Loop
+# ========================================
+
+nt = int(t_max / dt)              # Total number of time steps
+T_record = []                     # To store the temperature profile at each time step
+
+# Time integration using explicit finite difference
+for t in range(nt):
+    T_new = T.copy()
+    for i in range(1, Nx - 1):  # Update interior points only
+        T_new[i] = T[i] + alpha * dt / dx**2 * (T[i+1] - 2*T[i] + T[i-1])
+    T = T_new
+    T_record.append(T.copy())   # Save current temperature profile
+
+# ========================================
+# SECTION 5: Plotting the Results
+# ========================================
+
+plt.figure(figsize=(10, 6))
+
+# Choose specific time points to visualize: t = 0, 2, 5, 10 seconds
+times_to_plot = [0, int(2/dt), int(5/dt), nt-1]
+
+for i, t_index in enumerate(times_to_plot):
+    plt.plot(x, T_record[t_index], label=f't = {t_index*dt:.2f} s')
+
+plt.xlabel('Position along the rod (x)')
+plt.ylabel('Temperature (T)')
+plt.title('Temperature Distribution Along the Rod Over Time')
+plt.legend()
+plt.grid(True)
+plt.show()
