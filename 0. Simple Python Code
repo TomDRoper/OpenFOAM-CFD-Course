@@ -1,0 +1,23 @@
+# =============================================================================
+# Simple Python Script (Works in Spyder, Jupyter, Google Colab)
+# =============================================================================
+
+# Import required library
+import matplotlib.pyplot as plt
+
+# Create some data
+x = list(range(0, 11))            # numbers from 0 to 10
+y = [i**2 for i in x]             # square of each number
+
+# Print results to console
+print("x values:", x)
+print("y values (squares):", y)
+
+# Plot results
+plt.plot(x, y, marker='o', label="y = x^2")
+plt.xlabel("x")
+plt.ylabel("y")
+plt.title("Simple Plot Example")
+plt.legend()
+plt.grid(True)
+plt.show()
