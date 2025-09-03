@@ -47,6 +47,9 @@ un = np.ones(nx) # Temporary array for time stepping
 u = (1 / (2 * np.sqrt(np.pi * g))) * np.exp(-(1 - theta)**2 / (4 * g))
 ui = u.copy()  # Save initial condition for comparison
 
+# --- Ensure a figure exists in every environment ---
+plt.figure("1D Linear Advection")  # (NEW) make sure a figure is created
+
 # Plot the initial condition
 plt.plot(x, u, label='Initial Condition')
 
@@ -84,26 +87,36 @@ print(f"Upwind (loop) execution time: {end - start:.4f} s")
 # print(f"Upwind (vectorized) execution time: {end - start:.4f} s")
 
 # =======================================
-# SECTION 6: Optional Corrected CDS (Unstable)
+# SECTION 6: Central Difference Scheme
 # =======================================
 
-# This section is commented out by default
-# It uses the Central Difference Scheme (CDS) which is unstable for advection without correction
-
+# # Re-initialize from Gaussian
 # def initial_conditions():
 #     return (1 / (2 * np.sqrt(np.pi * g))) * np.exp(-(1 - theta)**2 / (4 * g))
 
 # u = initial_conditions()
-# start = time.process_time()
-# un = u.copy()
-# for n in range(nt):
-#     u_prev_prev = un.copy()
-#     un = u.copy()
-#     u[1:-1] = u_prev_prev[1:-1] - c * dt / dx * (un[2:] - un[:-2])
-#     u[0] = u[nx - 2]
-#     u[nx - 1] = u[1]
-# print(f"CDS execution time: {time.process_time() - start:.4f} s")
-# plt.plot(x, u, '--', label="Corrected CDS (vectorized)")
+# uold = u.copy()   # u^{t-1}
+# un = u.copy()     # storage for updates
+
+# # Bootstrap first step with Forward Euler (since CDS needs t-1 and t)
+# uold = u.copy()
+# u[1:-1] = uold[1:-1] - (c * dt / (2 * dx)) * (uold[2:] - uold[:-2])
+# u[0] = u[-2]
+# u[-1] = u[1]
+
+# # Time-stepping with CDS
+# for n in range(2, nt):
+#     un[1:-1] = uold[1:-1] - (c * dt / dx) * (u[2:] - u[:-2])
+#     # Periodic BCs
+#     un[0] = un[-2]
+#     un[-1] = un[1]
+#     # Shift arrays
+#     uold, u = u, un.copy()
+
+# # Plot result
+# plt.plot(x, u, '-.', label="Central Difference")
+
+
 
 # =======================================
 # SECTION 7: Final Plot
@@ -115,4 +128,10 @@ plt.xlabel("x")
 plt.ylabel("u")
 plt.grid(True)
 plt.legend()
-plt.show()
+
+# --- Make layout tidy and force a blocking show across IDEs ---
+try:
+    plt.tight_layout()
+except Exception:
+    pass
+plt.show(block=True)  # (NEW) block=True helps some IDEs reliably display the figure
