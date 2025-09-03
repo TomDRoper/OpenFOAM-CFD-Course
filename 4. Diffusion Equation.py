@@ -29,6 +29,9 @@ un = np.zeros(nx)             # Temporary array for updates
 # Set initial condition: pulse between x = 0.8 and x = 1.2
 u[int(0.8/dx):int(1.2/dx+1)] = 1
 
+# --- Ensure a figure is created ---
+plt.figure("1D Diffusion Example")
+
 # Plot the initial condition
 plt.plot(x, u, label='Initial Condition')
 
@@ -48,25 +51,33 @@ for n in range(nt):
     # Dirichlet Boundary Conditions (fixed to 0 at both ends)
     u[0] = 0
     u[-1] = 0
-    #Neumann BC (Flux fixed at both ends)
-    # u[0]=u[1] 
-    # u[-1]=u[-2] 
+    # Neumann BC (Flux fixed at both ends)
+    # u[0] = u[1] 
+    # u[-1] = u[-2] 
 
     # === Update interior points using Explicit Finite Difference ===
     # Forward Euler in time + Central Difference in space
     u[1:-1] = un[1:-1] + nu * dt / dx**2 * (un[2:] - 2*un[1:-1] + un[:-2])
 
     # === Plot intermediate results every f steps ===
-    plotcond[n] = np.round((n / (f * p)), 1)
-    plotcond[n] = plotcond[n].astype(int)
-
+    plotcond[n] = np.round((n / (f * p)), 1).astype(int)
     if plotcond[n] == 1:
-        plt.figure(1)
         plt.plot(x, u, label=f't = {np.round(n * dt, 1)} s')
-        plt.legend()
-        # plt.ylim(0, 1.2)  # Optional: set y-axis limits
         p += 1  # Update plot counter
 
 # ============================================
 # Final output will be shown with multiple time curves
 # ============================================
+
+plt.title("1D Diffusion Equation (Explicit FDM)")
+plt.xlabel("x")
+plt.ylabel("u")
+plt.legend()
+plt.grid(True)
+
+# --- Force reliable display across Spyder, Jupyter, Colab, etc. ---
+try:
+    plt.tight_layout()
+except Exception:
+    pass
+plt.show(block=True)
