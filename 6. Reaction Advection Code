@@ -1,0 +1,200 @@
+# =============================================================================
+# 
+# Explicit Finite Difference Method Code
+# Solves the 1D Isothermal Reaction-Advection-Diffusion Equation
+# Assumes A + B -> C with k_forward = k1
+# Assumes Tubular Plug-Flow Reactor in Laminar Regime 
+# Written by: Cameron Armstrong (2020)
+# Institution: Virginia Commonwealth University
+#
+# =============================================================================
+
+# ===== Required Modules =======================================================
+import numpy as np
+from matplotlib import pyplot as plt
+import time
+
+# Allow division-by-zero warnings to be ignored for the initial termination test
+np.seterr(divide='ignore')
+
+# ===== Physical / Operating Parameters =======================================
+F_a = 600                  # Inlet concentration of species A (mol/m^3)
+F_b = 500                  # Inlet concentration of species B (mol/m^3)
+
+D1  = 0.005                # Axial dispersion coefficient (m^2/s)
+Q1  = 8.3e-8               # Volumetric flow rate (m^3/s)
+Ac1 = 2.0e-6               # Tube cross-sectional area (m^2)
+u1  = Q1 / Ac1             # Superficial/average velocity (m/s)
+
+V1  = 1.0e-5               # Reactor volume (m^3)
+xl1 = V1 / Ac1             # Reactor length (m) from V = A*L
+
+# ===== Numerical Discretization Parameters ===================================
+nx1 = 200                  # Number of spatial grid points
+dx1 = xl1 / (nx1 - 1)      # Spatial step (m)
+dt1 = 0.2 * dx1            # Time step (s); proportional to dx (explicit scheme)
+x1  = np.linspace(0, xl1, nx1)  # Spatial grid (m)
+
+# ===== Kinetics (Arrhenius) ===================================================
+Ea1 = 53106.5              # Activation energy (J/mol)
+k01 = 1175.26              # Pre-exponential factor (m^3/mol/s)
+R   = 8.314                # Universal gas constant (J/mol/K)
+T1  = 150 + 273.15         # Absolute temperature (K)
+k1  = k01 * np.exp(-Ea1 / R / T1)  # Second-order rate constant (m^3/mol/s)
+
+p = 0                      # Iteration counter (for diagnostics)
+
+# ===== Array Initialization (also sets Initial Conditions) ====================
+# Reagents start at inlet concentrations along the entire domain.
+A  = np.ones(nx1) * F_a    # Species A
+An = np.ones(nx1) * F_a    # Temp/previous A (for explicit update)
+
+B  = np.ones(nx1) * F_b    # Species B
+Bn = np.ones(nx1) * F_b    # Temp/previous B
+
+C  = np.zeros(nx1)         # Product C
+Cn = np.zeros(nx1)         # Temp/previous C
+
+# ===== Convergence / Termination Control =====================================
+tolcheck = np.ones(nx1)    # Storage for previous C profile (for relative change)
+reltol   = 1e-7            # Relative tolerance threshold for convergence
+
+
+def check_yourself(tolcheck, Cn):
+    """
+    Compute a relative change metric between the norm of the previous solution
+    (stored in 'tolcheck') and the current solution (Cn). Used for termination.
+
+    Parameters
+    ----------
+    tolcheck : np.ndarray
+        Previous iteration's solution snapshot (here, C).
+    Cn : np.ndarray
+        Current iteration's solution snapshot (here, C).
+
+    Returns
+    -------
+    float
+        Relative change (dimensionless). Convergence when this < reltol.
+    """
+    out = (np.abs((np.linalg.norm(tolcheck) - np.linalg.norm(Cn)))) / np.linalg.norm(Cn)
+    return out
+
+
+# ===== Finite Difference Update Kernels (Vectorized) ==========================
+# Schemes apply advection (first derivative), dispersion (second derivative),
+# and reaction (source/sink) in an explicit manner on interior nodes [1:-1].
+
+def CDS(u1, dt1, dx1, D1, k1, main, s1, s2, stoic):
+    """
+    Central Difference Scheme (CDS) for advection term.
+    Includes dispersion (second derivative) and reaction source/sink.
+
+    Parameters
+    ----------
+    u1 : float
+        Average velocity (m/s).
+    dt1 : float
+        Time step (s).
+    dx1 : float
+        Spatial step (m).
+    D1 : float
+        Axial dispersion coefficient (m^2/s).
+    k1 : float
+        Reaction rate constant (m^3/mol/s).
+    main : np.ndarray
+        Current species array being updated (e.g., A, B, or C).
+    s1, s2 : np.ndarray
+        Reactant arrays (A and B) used in the reaction term k1*s1*s2.
+    stoic : int
+        Stoichiometric sign: -1 for reactants (consumption), +1 for products (formation).
+
+    Returns
+    -------
+    np.ndarray
+        Updated interior nodes [1:-1] for the target species.
+    """
+    out = main[1:-1] \
+        - (u1) * (dt1 / (2 * dx1)) * (main[2:] - main[:-2]) \
+        + D1 * dt1 / dx1**2 * (main[2:] - 2 * main[1:-1] + main[:-2]) \
+        + stoic * k1 * s1[1:-1] * s2[1:-1] * dt1
+    return out
+
+
+def UDS(u1, dt1, dx1, D1, k1, main, s1, s2, stoic):
+    """
+    Upwind (Backward) Difference Scheme (UDS) for advection term.
+    Includes dispersion and reaction source/sink.
+    More numerically diffusive than CDS but often more stable for advection.
+
+    Parameters
+    ----------
+    (Same as CDS)
+
+    Returns
+    -------
+    np.ndarray
+        Updated interior nodes [1:-1] for the target species.
+    """
+    out = main[1:-1] \
+        - (u1) * (dt1 / (dx1)) * (main[1:-1] - main[:-2]) \
+        + D1 * dt1 / dx1**2 * (main[2:] - 2 * main[1:-1] + main[:-2]) \
+        + stoic * k1 * s1[1:-1] * s2[1:-1] * dt1
+    return out
+
+
+# ===== Time Marching Loop =====================================================
+# Loop until product profile C converges by relative tolerance.
+start = time.process_time()
+termcond = check_yourself(tolcheck, Cn)
+
+while termcond >= reltol:
+    # Update termination metric each iteration
+    termcond = check_yourself(tolcheck, Cn)
+
+    # Store current solutions (explicit method uses previous time level)
+    An = A.copy()
+    Bn = B.copy()
+    Cn = C.copy()
+
+    # Boundary Conditions:
+    # Inlet (x=0): Dirichlet (fixed) to feed concentrations
+    A[0] = F_a
+    B[0] = F_b
+
+    # Outlet (x=L): Neumann ~ zero-gradient (copy last interior value)
+    A[nx1 - 1] = A[nx1 - 2]
+    B[nx1 - 1] = B[nx1 - 2]
+    C[nx1 - 1] = C[nx1 - 2]
+
+    # Species updates (Upwind scheme for advection)
+    # Reactants consumed (stoic = -1), product formed (stoic = +1)
+    A[1:-1] = UDS(u1, dt1, dx1, D1, k1, An, An, Bn, -1)
+    B[1:-1] = UDS(u1, dt1, dx1, D1, k1, Bn, An, Bn, -1)
+    C[1:-1] = UDS(u1, dt1, dx1, D1, k1, Cn, An, Bn,  1)
+
+    # Save current C for the next relative-change comparison
+    tolcheck = C.copy()
+
+    # Iteration counter
+    p += 1
+
+end = time.process_time()
+cputime = round(end - start, 2)
+
+# ===== Visualization ==========================================================
+# Plot concentrations vs normalized reactor length (x/xL)
+plt.figure(1)
+plt.plot(x1 / xl1, C)  # Product
+plt.plot(x1 / xl1, A)  # Reactant A
+plt.plot(x1 / xl1, B)  # Reactant B
+plt.xlabel('Normalized Reactor Length (-)')
+plt.ylabel('Molar Concentration R1 (mol/m^3)')
+
+# ===== Yield Calculation & Reporting =========================================
+# Limiting reagent at the inlet dictates max possible product concentration.
+lim_reagent = np.min([F_a, F_b])
+prod_yield = round(C[nx1 - 1] / lim_reagent * 100, 2)
+
+print('Predicted Product Yield: %s %%' % (prod_yield))
+print('The model solved in %ss and required %s iterations' % (cputime, p))
