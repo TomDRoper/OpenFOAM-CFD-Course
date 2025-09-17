@@ -1,0 +1,163 @@
+# -*- coding: utf-8 -*-
+"""
+2D Diffusion (Heat) Equation — Explicit FTCS
+Adapted from: Lorena Barba, 12 Steps to NS in Python
+
+This version:
+- Uses the general 2D explicit stability limit for dt (valid when dx != dy).
+- Keeps your original Dirichlet BCs (hot on top & left, cool on bottom & right).
+- Adds clearer comments, progress printing, and better plotting metadata.
+
+Author(s): baileycd2 + Cameron Armstrong (2020) + tweaks by ChatGPT
+"""
+
+# =========================
+# Required Modules
+# =========================
+import numpy as np
+from matplotlib import pyplot as plt
+from matplotlib import cm
+# Modern Matplotlib no longer needs Axes3D explicitly, but import is harmless:
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+
+# =========================
+# Problem / Grid Parameters
+# =========================
+nx = 100          # number of grid points in x
+ny = 100          # number of grid points in y
+xl = 2.0          # domain length in x [m] (arbitrary units fine too)
+yl = 2.0          # domain length in y [m]
+
+dx = xl / (nx - 1)         # grid spacing in x
+dy = yl / (ny - 1)         # grid spacing in y
+
+nu = 0.05        # diffusivity [m^2/s] (thermal diffusivity if this is heat)
+T0 = 2.0         # "hot" boundary temperature/value
+Tw = 1.0         # "cool" boundary temperature/value
+
+# =========================
+# Time Step (stability)
+# =========================
+# Explicit FTCS in 2D requires: (nu*dt/dx^2) + (nu*dt/dy^2) <= 1/2
+# => dt_max = (dx^2*dy^2) / (2*nu*(dx^2 + dy^2))
+sigma = 0.25                 # safety factor (0 < sigma <= 1); 1 hits the limit
+dt_max = (dx*dx * dy*dy) / (2.0 * nu * (dx*dx + dy*dy))
+dt = sigma * dt_max          # stable for any dx, dy if 0<sigma<=1
+
+# Number of time steps to march
+nt = 1700
+
+# Precompute coefficients (used in stencil)
+lamx = nu * dt / dx**2       # "diffusion number" in x
+lamy = nu * dt / dy**2       # "diffusion number" in y
+assert lamx + lamy <= 0.5 + 1e-12, "dt too large for stability!"
+
+print(f"dx={dx:.4f}, dy={dy:.4f}, dt={dt:.6f} | lamx={lamx:.4f}, lamy={lamy:.4f}, lamx+lamy={lamx+lamy:.4f}")
+
+# =========================
+# Grid & Initial Condition
+# =========================
+x = np.linspace(0.0, xl, nx)
+y = np.linspace(0.0, yl, ny)
+X, Y = np.meshgrid(x, y, indexing="xy")
+
+# Field arrays (float64 for numerical stability)
+u = np.full((ny, nx), Tw, dtype=float)  # start everywhere "cool"
+un = np.empty_like(u)                   # work array
+
+# Impose initial boundary state (Dirichlet on all edges)
+# Top edge (j = ny-1) and Left edge (i = 0) are HOT
+u[-1, :] = T0
+u[:,  0] = T0
+# Bottom edge (j = 0) and Right edge (i = nx-1) are COOL
+u[ 0, :] = Tw
+u[:, -1] = Tw
+
+# =========================
+# (Optional) Plot Initial Condition
+# =========================
+fig1 = plt.figure()
+ax1 = fig1.add_subplot(111, projection='3d')
+surf = ax1.plot_surface(X, Y, u, rstride=1, cstride=1, cmap=cm.viridis,
+                        linewidth=0, antialiased=False)
+ax1.set_xlim(0, xl); ax1.set_ylim(0, yl); ax1.set_zlim(min(Tw, T0)-0.1, max(Tw, T0)+0.5)
+ax1.set_xlabel('x'); ax1.set_ylabel('y'); ax1.set_zlabel('u')
+ax1.set_title('Initial condition (3D surface)')
+
+fig2 = plt.figure(figsize=(6, 6), dpi=100)
+im2 = plt.imshow(u, origin='lower', extent=[0, xl, 0, yl], aspect='equal', cmap='viridis')
+plt.colorbar(im2, label='u')
+plt.xlabel('x'); plt.ylabel('y'); plt.title('Initial condition (2D)')
+
+# =========================
+# Solver (Explicit FTCS)
+# =========================
+def diffuse(u, nt, lamx, lamy, T0, Tw, progress_every=25):
+    """
+    March the 2D diffusion equation forward in time using explicit FTCS.
+
+    Parameters
+    ----------
+    u : (ny, nx) array
+        Current field; will be updated in-place and also returned.
+    nt : int
+        Number of time steps to advance.
+    lamx, lamy : float
+        Diffusion numbers: lamx = nu*dt/dx^2, lamy = nu*dt/dy^2.
+    T0, Tw : float
+        Dirichlet boundary values (hot = T0 on top/left; cool = Tw on bottom/right).
+    progress_every : int
+        Print progress every N steps (set None or 0 to disable).
+
+    Returns
+    -------
+    u : (ny, nx) array
+        The updated field after nt steps (same array as input, for convenience).
+    """
+    ny, nx = u.shape
+    un = np.empty_like(u)
+
+    for n in range(1, nt+1):
+        # Copy current state
+        un[...] = u
+
+        # Interior update: vectorized 5-point Laplacian
+        # u_{i,j}^{n+1} = u_{i,j}^n + lamx*(E - 2C + W) + lamy*(N - 2C + S)
+        u[1:-1, 1:-1] = (un[1:-1, 1:-1]
+                         + lamx * (un[1:-1, 2:]   - 2.0*un[1:-1, 1:-1] + un[1:-1, 0:-2])
+                         + lamy * (un[2:,   1:-1] - 2.0*un[1:-1, 1:-1] + un[0:-2, 1:-1]))
+
+        # Dirichlet BCs (reapply after each step)
+        # Bottom (j=0) and Right (i=nx-1) are COOL
+        u[0,   :] = Tw
+        u[:, -1] = Tw
+        # Top (j=ny-1) and Left (i=0) are HOT
+        u[-1,  :] = T0
+        u[:,  0] = T0
+
+        # Progress print
+        if progress_every and (n % progress_every == 0 or n == nt):
+            print(f"[{n:4d}/{nt}] min={u.min():.3f} max={u.max():.3f}")
+
+    return u
+
+# Run the solver
+u = diffuse(u, nt=nt, lamx=lamx, lamy=lamy, T0=T0, Tw=Tw, progress_every=25)
+
+# =========================
+# Plot Final State
+# =========================
+fig3 = plt.figure()
+ax3 = fig3.add_subplot(111, projection='3d')
+surf = ax3.plot_surface(X, Y, u, rstride=1, cstride=1, cmap=cm.viridis,
+                        linewidth=0, antialiased=True)
+ax3.set_xlim(0, xl); ax3.set_ylim(0, yl); ax3.set_zlim(min(Tw, T0)-0.1, max(Tw, T0)+0.5)
+ax3.set_xlabel('x'); ax3.set_ylabel('y'); ax3.set_zlabel('u')
+ax3.set_title('Final state (3D surface)')
+
+fig4 = plt.figure(figsize=(6, 6), dpi=100)
+im4 = plt.imshow(u, origin='lower', extent=[0, xl, 0, yl], aspect='equal', cmap='viridis')
+plt.colorbar(im4, label='u')
+plt.xlabel('x'); plt.ylabel('y'); plt.title('Final state (2D)')
+plt.tight_layout()
+plt.show()
