@@ -1,13 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-This version:
-- Uses the general 2D explicit stability limit for dt (valid when dx != dy).
-- Keeps your original Dirichlet BCs (hot on top & left, cool on bottom & right).
-- Adds clearer comments, progress printing, and better plotting metadata.
-
-Author(s): Colin Bailey
-"""
-
 # =========================
 # Required Modules
 # =========================
