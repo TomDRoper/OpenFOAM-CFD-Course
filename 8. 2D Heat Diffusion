@@ -1,14 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-2D Diffusion (Heat) Equation — Explicit FTCS
-Adapted from: Lorena Barba, 12 Steps to NS in Python
-
 This version:
 - Uses the general 2D explicit stability limit for dt (valid when dx != dy).
 - Keeps your original Dirichlet BCs (hot on top & left, cool on bottom & right).
 - Adds clearer comments, progress printing, and better plotting metadata.
 
-Author(s): baileycd2 + Cameron Armstrong (2020) + tweaks by ChatGPT
+Author(s): Colin Bailey
 """
 
 # =========================
